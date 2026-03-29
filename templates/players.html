@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}CricTrack - Players{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem;">
+    <h1 style="margin:0;">Players</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('add-modal').style.display='flex'">+ Add Player</button>
+</div>
+
+<!-- Add player modal -->
+<div id="add-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; align-items:center; justify-content:center;">
+    <div class="card" style="width:380px; margin:0;">
+        <h2>Add Player</h2>
+        <div class="form-group">
+            <label>Player Name</label>
+            <input type="text" id="new-player-name" placeholder="e.g. Rohit Sharma" autofocus>
+        </div>
+        <div id="add-error" class="alert alert-error" style="display:none;"></div>
+        <div style="display:flex; gap:0.5rem;">
+            <button class="btn btn-primary" onclick="addPlayer()">Add Player</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('add-modal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+</div>
+
+{% if players %}
+<div class="card" style="padding:0; overflow:hidden;">
+    <table>
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th>Matches</th>
+                <th>Runs</th>
+                <th>Avg</th>
+                <th>SR</th>
+                <th>Wickets</th>
+                <th>Eco</th>
+                <th>Catches</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            {% set bat = player.career_batting() %}
+            {% set bowl = player.career_bowling() %}
+            {% set field = player.career_fielding() %}
+            <tr>
+                <td><a href="/player/{{ player.id }}" style="font-weight:600; color:var(--text);">{{ player.name }}</a></td>
+                <td class="mono">{{ player.matches_played() }}</td>
+                <td class="mono" style="color:var(--text);">{{ bat.runs }}</td>
+                <td class="mono">{{ bat.average }}</td>
+                <td class="mono">{{ bat.strike_rate }}</td>
+                <td class="mono" style="color:var(--text);">{{ bowl.wickets }}</td>
+                <td class="mono">{{ bowl.economy }}</td>
+                <td class="mono">{{ field.catches }}</td>
+                <td><a href="/player/{{ player.id }}" class="btn btn-secondary btn-sm">Profile</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card empty-state">
+    <div style="font-size:3rem; margin-bottom:1rem;">👤</div>
+    <p style="color:var(--text-mid);">No players registered yet.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('add-modal').style.display='flex'">Add First Player</button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function addPlayer() {
+    const name = document.getElementById('new-player-name').value.trim();
+    const err = document.getElementById('add-error');
+    if (!name) { err.textContent = 'Enter a name.'; err.style.display = 'block'; return; }
+
+    const res = await fetch('/api/player', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name})
+    });
+    const data = await res.json();
+    if (data.error) { err.textContent = data.error; err.style.display = 'block'; return; }
+    location.reload();
+}
+
+document.getElementById('new-player-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addPlayer();
+});
+</script>
+{% endblock %}

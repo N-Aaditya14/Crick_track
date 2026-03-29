@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ player.name }} - CricTrack{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:0.5rem;">
+    <a href="/players" style="font-size:0.85rem; color:var(--text-dim);">← Players</a>
+</div>
+<h1>{{ player.name }}</h1>
+
+<div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+    <span class="badge badge-blue">{{ matches }} Matches</span>
+</div>
+
+<!-- Batting -->
+<div class="card">
+    <h3>Batting Career</h3>
+    <div class="stat-grid cols-4" style="margin-bottom:0.5rem;">
+        <div class="stat-box"><div class="stat-val">{{ batting.runs }}</div><div class="stat-lbl">Runs</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.innings }}</div><div class="stat-lbl">Innings</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.average }}</div><div class="stat-lbl">Average</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.strike_rate }}</div><div class="stat-lbl">Strike Rate</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.highest }}</div><div class="stat-lbl">Highest</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.fours }}</div><div class="stat-lbl">Fours</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.sixes }}</div><div class="stat-lbl">Sixes</div></div>
+        <div class="stat-box"><div class="stat-val">{{ batting.dismissals }}</div><div class="stat-lbl">Dismissals</div></div>
+    </div>
+</div>
+
+<!-- Bowling -->
+<div class="card">
+    <h3>Bowling Career</h3>
+    <div class="stat-grid cols-4">
+        <div class="stat-box"><div class="stat-val">{{ bowling.wickets }}</div><div class="stat-lbl">Wickets</div></div>
+        <div class="stat-box"><div class="stat-val">{{ bowling.innings }}</div><div class="stat-lbl">Innings</div></div>
+        <div class="stat-box"><div class="stat-val">{{ bowling.overs }}</div><div class="stat-lbl">Overs</div></div>
+        <div class="stat-box"><div class="stat-val">{{ bowling.runs }}</div><div class="stat-lbl">Runs Conceded</div></div>
+        <div class="stat-box"><div class="stat-val">{{ bowling.economy }}</div><div class="stat-lbl">Economy</div></div>
+        <div class="stat-box"><div class="stat-val">{{ bowling.average }}</div><div class="stat-lbl">Average</div></div>
+    </div>
+</div>
+
+<!-- Fielding -->
+<div class="card">
+    <h3>Fielding Career</h3>
+    <div class="stat-grid cols-4">
+        <div class="stat-box"><div class="stat-val">{{ fielding.catches }}</div><div class="stat-lbl">Catches</div></div>
+        <div class="stat-box"><div class="stat-val">{{ fielding.run_outs }}</div><div class="stat-lbl">Run Outs</div></div>
+    </div>
+</div>
+
+<!-- Recent Innings -->
+{% if recent_innings %}
+<div class="card" style="padding:0; overflow:hidden;">
+    <div style="padding:1rem 1.25rem 0.75rem;">
+        <h3 style="margin:0;">Recent Innings</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Match</th>
+                <th>Runs</th>
+                <th>Balls</th>
+                <th>4s</th>
+                <th>6s</th>
+                <th>SR</th>
+                <th>Dismissal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inn in recent_innings %}
+            <tr>
+                <td><a href="/match/{{ inn.match_id }}">Match #{{ inn.match_id }}</a></td>
+                <td class="mono" style="font-weight:600; color:var(--text);">{{ inn.runs }}{% if not inn.dismissed %}*{% endif %}</td>
+                <td class="mono">{{ inn.balls_faced }}</td>
+                <td class="mono">{{ inn.fours }}</td>
+                <td class="mono">{{ inn.sixes }}</td>
+                <td class="mono">{{ "%.1f"|format(inn.runs / inn.balls_faced * 100) if inn.balls_faced > 0 else '-' }}</td>
+                <td style="font-size:0.82rem;">{{ inn.dismissal_type or ('not out' if inn.balls_faced > 0 else '-') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

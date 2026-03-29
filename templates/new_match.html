@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}New Match - CricTrack{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:0.5rem;">
+    <a href="/" style="font-size:0.85rem; color:var(--text-dim);">← Matches</a>
+</div>
+<h1>New Match</h1>
+
+<div id="error-msg" class="alert alert-error" style="display:none;"></div>
+
+<!-- Match Setup -->
+<div class="card">
+    <h3>Match Details</h3>
+    <div class="grid-3">
+        <div class="form-group">
+            <label>Team A Name</label>
+            <input type="text" id="team_a" placeholder="e.g. Tigers" value="">
+        </div>
+        <div class="form-group">
+            <label>Team B Name</label>
+            <input type="text" id="team_b" placeholder="e.g. Lions" value="">
+        </div>
+        <div class="form-group">
+            <label>Overs Per Innings</label>
+            <input type="number" id="overs" value="10" min="1" max="50">
+        </div>
+    </div>
+    <div class="grid-2">
+        <div class="form-group">
+            <label>Toss Winner</label>
+            <select id="toss_winner">
+                <option value="">-- Select --</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Toss Choice</label>
+            <select id="toss_choice">
+                <option value="bat">Bat First</option>
+                <option value="field">Field First</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Team Builder -->
+<div class="grid-2">
+    <!-- Team A -->
+    <div class="card">
+        <h3>Team A Players</h3>
+        <div style="margin-bottom:1rem;">
+            <div style="position:relative;">
+                <input type="text" id="search_a" placeholder="Search players..." oninput="filterPlayers('a')">
+            </div>
+        </div>
+        <div id="player-list-a" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:0.4rem;">
+            {% for player in players %}
+            <label class="player-checkbox" data-name="{{ player.name.lower() }}" data-team="a"
+                style="display:flex; align-items:center; gap:0.75rem; padding:0.5rem 0.75rem; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.15s;">
+                <input type="checkbox" value="{{ player.id }}" style="width:auto; accent-color:var(--green);">
+                <span style="font-size:0.9rem;">{{ player.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-dim);">
+            <span id="count-a">0</span> selected
+        </div>
+        <div style="margin-top:0.75rem;">
+            <button class="btn btn-ghost btn-sm" onclick="openAddPlayer('a')">+ Quick Add Player</button>
+        </div>
+    </div>
+
+    <!-- Team B -->
+    <div class="card">
+        <h3>Team B Players</h3>
+        <div style="margin-bottom:1rem;">
+            <input type="text" id="search_b" placeholder="Search players..." oninput="filterPlayers('b')">
+        </div>
+        <div id="player-list-b" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:0.4rem;">
+            {% for player in players %}
+            <label class="player-checkbox" data-name="{{ player.name.lower() }}" data-team="b"
+                style="display:flex; align-items:center; gap:0.75rem; padding:0.5rem 0.75rem; border-radius:8px; cursor:pointer; border:1px solid transparent; transition:all 0.15s;">
+                <input type="checkbox" value="{{ player.id }}" style="width:auto; accent-color:var(--green);">
+                <span style="font-size:0.9rem;">{{ player.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div style="margin-top:0.75rem; font-size:0.8rem; color:var(--text-dim);">
+            <span id="count-b">0</span> selected
+        </div>
+        <div style="margin-top:0.75rem;">
+            <button class="btn btn-ghost btn-sm" onclick="openAddPlayer('b')">+ Quick Add Player</button>
+        </div>
+    </div>
+</div>
+
+<div style="display:flex; gap:0.75rem;">
+    <button class="btn btn-primary" onclick="createMatch()" style="font-size:1rem; padding:0.8rem 2rem;">Start Match →</button>
+    <a href="/" class="btn btn-ghost" style="font-size:1rem; padding:0.8rem 1.5rem;">Cancel</a>
+</div>
+
+<!-- Quick Add Player Modal -->
+<div id="quick-add-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; align-items:center; justify-content:center;">
+    <div class="card" style="width:380px; margin:0;">
+        <h2>Quick Add Player</h2>
+        <div class="form-group">
+            <label>Player Name</label>
+            <input type="text" id="quick-player-name" placeholder="Enter name">
+        </div>
+        <div id="quick-error" class="alert alert-error" style="display:none;"></div>
+        <div style="display:flex; gap:0.5rem;">
+            <button class="btn btn-primary" onclick="quickAddPlayer()">Add & Select</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('quick-add-modal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let quickAddTeam = null;
+
+// Update toss winner options when team names change
+function updateTossOptions() {
+    const a = document.getElementById('team_a').value || 'Team A';
+    const b = document.getElementById('team_b').value || 'Team B';
+    const sel = document.getElementById('toss_winner');
+    sel.innerHTML = `<option value="">-- Select --</option>
+        <option value="${a}">${a}</option>
+        <option value="${b}">${b}</option>`;
+}
+
+document.getElementById('team_a').addEventListener('input', updateTossOptions);
+document.getElementById('team_b').addEventListener('input', updateTossOptions);
+
+// Checkbox styling
+document.querySelectorAll('.player-checkbox').forEach(lbl => {
+    const cb = lbl.querySelector('input');
+    cb.addEventListener('change', () => {
+        lbl.style.background = cb.checked ? 'var(--green-glow)' : '';
+        lbl.style.borderColor = cb.checked ? 'rgba(34,197,94,0.3)' : 'transparent';
+        updateCounts();
+    });
+});
+
+function updateCounts() {
+    ['a', 'b'].forEach(team => {
+        const count = document.querySelectorAll(`#player-list-${team} input:checked`).length;
+        document.getElementById(`count-${team}`).textContent = count;
+    });
+}
+
+function filterPlayers(team) {
+    const q = document.getElementById(`search_${team}`).value.toLowerCase();
+    document.querySelectorAll(`#player-list-${team} .player-checkbox`).forEach(lbl => {
+        lbl.style.display = lbl.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+
+function openAddPlayer(team) {
+    quickAddTeam = team;
+    document.getElementById('quick-player-name').value = '';
+    document.getElementById('quick-error').style.display = 'none';
+    document.getElementById('quick-add-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('quick-player-name').focus(), 50);
+}
+
+async function quickAddPlayer() {
+    const name = document.getElementById('quick-player-name').value.trim();
+    const err = document.getElementById('quick-error');
+    if (!name) { err.textContent = 'Enter a name.'; err.style.display = 'block'; return; }
+
+    const res = await fetch('/api/player', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name})
+    });
+    const data = await res.json();
+    if (data.error) { err.textContent = data.error; err.style.display = 'block'; return; }
+
+    // Add checkbox to both lists and auto-check in target team
+    ['a', 'b'].forEach(team => {
+        const list = document.getElementById(`player-list-${team}`);
+        const lbl = document.createElement('label');
+        lbl.className = 'player-checkbox';
+        lbl.dataset.name = name.toLowerCase();
+        lbl.dataset.team = team;
+        lbl.style.cssText = 'display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.75rem;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = data.id;
+        cb.style.cssText = 'width:auto;accent-color:var(--green);';
+
+        const sp = document.createElement('span');
+        sp.style.fontSize = '0.9rem';
+        sp.textContent = name;
+
+        lbl.appendChild(cb);
+        lbl.appendChild(sp);
+        list.appendChild(lbl);
+
+        cb.addEventListener('change', () => {
+            lbl.style.background = cb.checked ? 'var(--green-glow)' : '';
+            lbl.style.borderColor = cb.checked ? 'rgba(34,197,94,0.3)' : 'transparent';
+            updateCounts();
+        });
+
+        if (team === quickAddTeam) {
+            cb.checked = true;
+            lbl.style.background = 'var(--green-glow)';
+            lbl.style.borderColor = 'rgba(34,197,94,0.3)';
+        }
+    });
+
+    updateCounts();
+    document.getElementById('quick-add-modal').style.display = 'none';
+}
+
+document.getElementById('quick-player-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') quickAddPlayer();
+});
+
+async function createMatch() {
+    const teamA = document.getElementById('team_a').value.trim();
+    const teamB = document.getElementById('team_b').value.trim();
+    const overs = parseInt(document.getElementById('overs').value);
+    const tossWinner = document.getElementById('toss_winner').value;
+    const tossChoice = document.getElementById('toss_choice').value;
+    const err = document.getElementById('error-msg');
+
+    if (!teamA || !teamB) { err.textContent = 'Enter both team names.'; err.style.display = 'block'; return; }
+    if (teamA === teamB) { err.textContent = 'Team names must be different.'; err.style.display = 'block'; return; }
+    if (!overs || overs < 1) { err.textContent = 'Enter valid overs.'; err.style.display = 'block'; return; }
+
+    const playersA = [...document.querySelectorAll('#player-list-a input:checked')].map(cb => cb.value);
+    const playersB = [...document.querySelectorAll('#player-list-b input:checked')].map(cb => cb.value);
+
+    if (playersA.length === 0 || playersB.length === 0) {
+        err.textContent = 'Each team needs at least 1 player.'; err.style.display = 'block'; return;
+    }
+
+    err.style.display = 'none';
+
+    const res = await fetch('/api/match', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            team_a_name: teamA, team_b_name: teamB, overs,
+            toss_winner: tossWinner, toss_choice: tossChoice,
+            team_a_players: playersA, team_b_players: playersB
+        })
+    });
+    const data = await res.json();
+    window.location.href = `/score/${data.match_id}`;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Match Scorecard - CricTrack{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:0.5rem;">
+    <a href="/" style="font-size:0.85rem; color:var(--text-dim);">← Matches</a>
+</div>
+
+<div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+    <h1 style="margin:0;">{{ match.team_a_name }} vs {{ match.team_b_name }}</h1>
+    {% if match.status == 'complete' %}
+        <span class="badge badge-green">Complete</span>
+    {% elif 'innings' in match.status %}
+        <span class="badge badge-amber">Live</span>
+    {% endif %}
+</div>
+
+<div style="color:var(--text-dim); font-size:0.85rem; margin-bottom:1.5rem; display:flex; gap:1.5rem;">
+    <span>{{ match.overs }} overs</span>
+    <span>{{ match.date.strftime('%d %b %Y') }}</span>
+    {% if match.toss_winner %}
+        <span>{{ match.toss_winner }} won toss, chose to {{ match.toss_choice }}</span>
+    {% endif %}
+</div>
+
+{% if match.status == 'complete' and match.result_text %}
+<div class="alert alert-success" style="font-size:1.05rem; font-weight:600;">
+    🏆 {{ match.result_text }}
+</div>
+{% endif %}
+
+{% if match.status != 'complete' %}
+<div style="margin-bottom:1rem;">
+    <a href="/score/{{ match.id }}" class="btn btn-primary">Continue Scoring →</a>
+</div>
+{% endif %}
+
+{% for innings in innings_list %}
+<div class="card" style="margin-bottom:1.5rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <div>
+            <h2 style="margin:0;">{{ innings.batting_team }}</h2>
+            <div style="font-size:0.8rem; color:var(--text-dim);">Innings {{ innings.innings_number }}</div>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--green); line-height:1;">
+                {{ innings.total_runs }}/{{ innings.total_wickets }}
+            </div>
+            <div style="font-family:'DM Mono',monospace; color:var(--text-dim); font-size:0.9rem;">
+                {{ innings.over_display() }} ov
+                {% if innings.extras > 0 %} | Extras: {{ innings.extras }}{% endif %}
+            </div>
+            {% if innings.target %}
+            <div style="font-size:0.82rem; color:var(--amber);">Target: {{ innings.target }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Batting scorecard -->
+    <h3>Batting</h3>
+    {% set bat_perfs = innings.batting_performances | selectattr('balls_faced', '>', 0) | list %}
+    {% if bat_perfs %}
+    <table style="margin-bottom:1.5rem;">
+        <thead><tr><th>Batsman</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>Dismissal</th></tr></thead>
+        <tbody>
+            {% for b in bat_perfs %}
+            <tr>
+                <td><a href="/player/{{ b.player_id }}" style="color:var(--text); font-weight:500;">{{ b.player.name }}</a></td>
+                <td class="mono" style="font-weight:600; color:var(--text);">{{ b.runs }}{% if not b.dismissed %}*{% endif %}</td>
+                <td class="mono">{{ b.balls_faced }}</td>
+                <td class="mono">{{ b.fours }}</td>
+                <td class="mono">{{ b.sixes }}</td>
+                <td class="mono">{{ "%.1f"|format(b.runs / b.balls_faced * 100) if b.balls_faced else '-' }}</td>
+                <td style="font-size:0.82rem; color:var(--text-dim);">{{ b.dismissal_type or 'not out' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Bowling scorecard -->
+    <h3>Bowling</h3>
+    {% set bowl_perfs = innings.bowling_performances | selectattr('balls_bowled', '>', 0) | list %}
+    {% if bowl_perfs %}
+    <table>
+        <thead><tr><th>Bowler</th><th>O</th><th>W</th><th>R</th><th>Wd</th><th>Nb</th><th>Eco</th></tr></thead>
+        <tbody>
+            {% for b in bowl_perfs %}
+            <tr>
+                <td><a href="/player/{{ b.player_id }}" style="color:var(--text); font-weight:500;">{{ b.player.name }}</a></td>
+                <td class="mono">{{ b.balls_bowled // 6 }}.{{ b.balls_bowled % 6 }}</td>
+                <td class="mono" style="color:var(--green);">{{ b.wickets }}</td>
+                <td class="mono">{{ b.runs_conceded }}</td>
+                <td class="mono">{{ b.wides }}</td>
+                <td class="mono">{{ b.no_balls }}</td>
+                <td class="mono">{{ "%.2f"|format(b.runs_conceded / (b.balls_bowled / 6)) if b.balls_bowled >= 6 else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- Fielding -->
+    {% set field_perfs = innings.fielding_performances | selectattr('catches', '>', 0) | list %}
+    {% set runout_perfs = innings.fielding_performances | selectattr('run_outs', '>', 0) | list %}
+    {% if field_perfs or runout_perfs %}
+    <div style="margin-top:1.25rem;">
+        <h3>Fielding</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+            {% for f in field_perfs %}
+            <span class="badge badge-blue">{{ f.player.name }}: {{ f.catches }}c</span>
+            {% endfor %}
+            {% for f in runout_perfs %}
+            <span class="badge badge-blue">{{ f.player.name }}: {{ f.run_outs }} RO</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+<div style="margin-top:1rem;">
+    <button class="btn btn-danger btn-sm" onclick="if(confirm('Delete this match and all its data?')) deleteMatch()">Delete Match</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteMatch() {
+    await fetch('/api/match/{{ match.id }}/delete', {method: 'POST'});
+    window.location.href = '/';
+}
+</script>
+{% endblock %}
