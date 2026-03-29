@@ -640,8 +640,9 @@ def delete_match(match_id):
     db.session.commit()
     return jsonify({'ok': True})
 
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
