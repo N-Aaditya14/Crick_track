@@ -168,6 +168,8 @@
     </div>
 
     <button class="btn btn-primary btn-lg" onclick="submitBall()">Record Ball →</button>
+<button class="btn btn-danger btn-sm" style="margin-top:0.5rem;" onclick="undoBall()">↩ Undo Last Ball</button>
+
 </div>
 
 <!-- ══ SCORECARD ══ -->
@@ -816,7 +818,12 @@ function showTab(name) {
         btn.style.borderBottom = active ? '2px solid var(--accent)' : '2px solid transparent';
     });
 }
-
+async function undoBall() {
+    if (!INNINGS_ID) return;
+    if (!confirm('Undo the last ball?')) return;
+    await fetch(`/api/innings/${INNINGS_ID}/undo`, { method: 'POST' });
+    await refreshState();
+}
 async function ensureInnings() {
     const res = await fetch(`/api/match/${MATCH_ID}/start_innings`, {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({})

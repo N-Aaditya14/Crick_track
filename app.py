@@ -624,7 +624,75 @@ def innings_state(innings_id):
         ]
     })
 
+@app.route('/api/innings/<int:innings_id>/undo', methods=['POST'])
+def undo_ball(innings_id):
+    innings = Innings.query.get_or_404(innings_id)
+    last_ball = Ball.query.filter_by(innings_id=innings_id).order_by(Ball.id.desc()).first()
+    if not last_ball:
+        return jsonify({'error': 'No balls to undo'}), 400
 
+    is_legal = last_ball.extra_type not in ('wide', 'no_ball')
+
+    innings.total_runs -= (last_ball.runs + last_ball.extra_runs)
+    innings.extras -= last_ball.extra_runs
+    if last_ball.wicket:
+        innings.total_wickets -= 1
+    if is_legal:
+        innings.total_balls -= 1
+
+    if last_ball.batsman_id:
+        bp = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=last_ball.batsman_id).first()
+        if bp:
+            if last_ball.extra_type is None:
+                bp.runs -= last_ball.runs
+                if last_ball.runs == 4: bp.fours -= 1
+                elif last_ball.runs == 6: bp.sixes -= 1
+            if is_legal:
+                bp.balls_faced -= 1
+            if last_ball.wicket and last_ball.wicket_type != 'run_out':
+                bp.dismissed = False
+                bp.dismissal_type = None
+                bp.is_active = True
+
+    if last_ball.wicket and last_ball.wicket_type == 'run_out' and last_ball.batsman_id:
+        bp = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=last_ball.batsman_id).first()
+        if bp:
+            bp.dismissed = False
+            bp.dismissal_type = None
+            bp.is_active = True
+
+    if last_ball.bowler_id:
+        bowl = BowlingPerformance.query.filter_by(innings_id=innings_id, player_id=last_ball.bowler_id).first()
+        if bowl:
+            if is_legal: bowl.balls_bowled -= 1
+            if last_ball.extra_type == 'wide':
+                bowl.wides -= 1
+                bowl.runs_conceded -= (last_ball.extra_runs + 1)
+            elif last_ball.extra_type == 'no_ball':
+                bowl.no_balls -= 1
+                bowl.runs_conceded -= (last_ball.runs + last_ball.extra_runs + 1)
+            elif last_ball.extra_type in ('bye', 'leg_bye'):
+                pass
+            else:
+                bowl.runs_conceded -= last_ball.runs
+            if last_ball.wicket and last_ball.wicket_type != 'run_out':
+                bowl.wickets -= 1
+
+    if last_ball.fielder_id:
+        fp = FieldingPerformance.query.filter_by(innings_id=innings_id, player_id=last_ball.fielder_id).first()
+        if fp:
+            if last_ball.wicket_type in ('caught', 'stumped'): fp.catches -= 1
+            elif last_ball.wicket_type == 'run_out': fp.run_outs -= 1
+
+    db.session.delete(last_ball)
+    db.session.commit()
+    return jsonify({
+        'ok': True,
+        'total_runs': innings.total_runs,
+        'total_wickets': innings.total_wickets,
+        'total_balls': innings.total_balls,
+        'over_display': innings.over_display()
+    })
 @app.route('/api/match/<int:match_id>/delete', methods=['POST'])
 def delete_match(match_id):
     match = Match.query.get_or_404(match_id)
