@@ -1,4 +1,4 @@
-# 🏏 CricTrack — School Cricket Scoring App
+# CricTrack — Cricket Scoring App
 
 A full cricket scoring and statistics tracker built with **Python Flask** + **SQLite**.
 
