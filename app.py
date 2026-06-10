@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cricket.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/cricket.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
