@@ -7,7 +7,8 @@ import json
 app = Flask(__name__)
 
 # Uses Render's Postgres database when deployed, or local SQLite for testing
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///instance/cricket.db')
+# Check if Render's Postgres database is available, otherwise fall back to temporary in-memory database
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///:memory:')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -711,9 +712,10 @@ def delete_match(match_id):
     db.session.commit()
     return jsonify({'ok': True})
 
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     import os
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     app.run(debug=False, host='0.0.0.0', port=port)
