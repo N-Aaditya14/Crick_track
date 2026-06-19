@@ -1,4 +1,5 @@
 import os
+from re import match
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -337,12 +338,18 @@ def start_innings(match_id):
     match = Match.query.get_or_404(match_id)
     data = request.json
 
+    target = data.get('target')
+    if match.current_innings == 2:
+        inn1 = Innings.query.filter_by(match_id=match_id, innings_number=1).first()
+        if inn1:
+            target = inn1.total_runs + 1
+
     innings = Innings(
         match_id=match_id,
         innings_number=match.current_innings,
         batting_team=match.batting_team,
         bowling_team=match.bowling_team,
-        target=data.get('target')
+        target=target
     )
     db.session.add(innings)
     db.session.flush()
@@ -510,7 +517,16 @@ def record_ball(innings_id):
     # Check innings end
     innings_over = False
     legal_overs = innings.total_balls // 6
-    if legal_overs >= match.overs or innings.total_wickets >= 10:
+
+    batting_team_size = MatchPlayer.query.filter_by(
+        match_id=match.id,
+        team='A' if innings.batting_team == match.team_a_name else 'B'
+    ).count()
+    max_wickets = max(batting_team_size - 1, 0)
+
+    target_reached = innings.target is not None and innings.total_runs >= innings.target
+
+    if legal_overs >= match.overs or innings.total_wickets >= max_wickets or target_reached:
         innings_over = True
         innings.is_complete = True
 
@@ -525,7 +541,7 @@ def record_ball(innings_id):
             inn2 = innings
             if inn2.total_runs > inn1.total_runs:
                 match.winner = inn2.batting_team
-                wickets_left = 10 - inn2.total_wickets
+                wickets_left = max_wickets - inn2.total_wickets
                 match.result_text = f"{inn2.batting_team} won by {wickets_left} wicket{'s' if wickets_left != 1 else ''}"
             elif inn1.total_runs > inn2.total_runs:
                 match.winner = inn1.batting_team
