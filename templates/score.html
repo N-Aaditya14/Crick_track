@@ -535,36 +535,32 @@ async function submitBall() {
     const data = await res.json();
 
     // Handle strike rotation for non-wicket balls
-    if (!wasWicket) {
-        handleStrikeAfterBall(runsScored, extraType, false);
-    }
+        if (!wasWicket) {
+            handleStrikeAfterBall(runsScored, extraType, false);
+        }
 
-    if (data.innings_over) {
-        handleInningsEnd(data);
-        return;
-    }
+        if (data.innings_over) {
+            handleInningsEnd(data);
+            return;
+        }
 
-    // Check if over just ended (balls % 6 === 0 and at least 1 ball bowled, legal delivery)
-    const ballsNow = data.total_balls;
-    if (isLegal && ballsNow > 0 && ballsNow % 6 === 0) {
-        // Swap ends at end of over
-        swapStrike();
-        showOverEndModal(data);
+        // Wicket — show new batsman popup first, before over-end check
+        if (wasWicket) {
+            batsmen = batsmen.filter(b => b.id !== dismissedId);
+            await showNewBatsmanModal(dismissedId);
+        }
+
+        // Check if over just ended
+        const ballsNow = data.total_balls;
+        if (isLegal && ballsNow > 0 && ballsNow % 6 === 0) {
+            swapStrike();
+            showOverEndModal(data);
+            await refreshState();
+            return;
+        }
+
         await refreshState();
-        return;
     }
-
-    // Wicket — show new batsman popup
-    if (wasWicket) {
-        // Remove dismissed batsman from local state
-        batsmen = batsmen.filter(b => b.id !== dismissedId);
-        showNewBatsmanModal(dismissedId);
-        await refreshState();
-        return;
-    }
-
-    await refreshState();
-}
 
 function resetControls() {
     selectedRuns = null; selectedExtra = null; selectedExtraRuns = 0;
@@ -590,8 +586,10 @@ function showOverEndModal(data) {
 }
 
 // ── New batsman modal ──
+// ── New batsman modal ──
+let newBatsmanResolve = null;
+
 function showNewBatsmanModal(dismissedId) {
-    // Hide already-batting players from options
     const activeBatIds = batsmen.map(b => b.id);
     document.querySelectorAll('.new-bat-option').forEach(lbl => {
         const id = parseInt(lbl.dataset.id);
@@ -601,6 +599,7 @@ function showNewBatsmanModal(dismissedId) {
         styleCheckLabel(lbl, false);
     });
     openModal('new-batsman-modal');
+    return new Promise(resolve => { newBatsmanResolve = resolve; });
 }
 
 async function saveNewBatsman() {
@@ -610,15 +609,12 @@ async function saveNewBatsman() {
     const newId = parseInt(radio.value);
     const newName = radio.closest('label').querySelector('span').textContent.trim();
 
-    // New batsman takes non-striker position (striker stays)
-    // If batsmen array is empty (e.g. last wicket scenario), put them on strike
     if (batsmen.length === 0) {
         batsmen = [{ id: newId, name: newName }];
     } else {
-        batsmen = [batsmen[0], { id: newId, name: newName }];
+        batsmen = [{ id: newId, name: newName }, batsmen[0]];
     }
 
-    // Update server
     await fetch(`/api/innings/${INNINGS_ID}/set_batsmen`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ player_ids: batsmen.map(b => b.id) })
@@ -627,6 +623,7 @@ async function saveNewBatsman() {
     closeModal('new-batsman-modal');
     renderBatsmenUI();
     await refreshState();
+    if (newBatsmanResolve) { newBatsmanResolve(); newBatsmanResolve = null; }
 }
 
 // ── Select batsmen modal ──
