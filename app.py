@@ -390,6 +390,12 @@ def set_batsmen(innings_id):
         perf = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=int(pid)).first()
         if perf:
             perf.is_active = True
+            if perf.batting_position is None:
+                next_pos = BattingPerformance.query.filter(
+                    BattingPerformance.innings_id == innings_id,
+                    BattingPerformance.batting_position != None
+                ).count()
+                perf.batting_position = next_pos + 1
 
     db.session.commit()
     return jsonify({'ok': True})
@@ -408,8 +414,20 @@ def set_bowler(innings_id):
     db.session.commit()
     return jsonify({'ok': True})
 
+def build_dismissal_text(wicket_type, bowler_id, fielder_id):
+    bowler = Player.query.get(bowler_id) if bowler_id else None
+    fielder = Player.query.get(fielder_id) if fielder_id else None
+    if wicket_type == 'caught' and fielder and bowler:
+        return f"c {fielder.name} b {bowler.name}"
+    elif wicket_type == 'stumped' and fielder and bowler:
+        return f"st {fielder.name} b {bowler.name}"
+    elif wicket_type in ('bowled', 'lbw', 'hit_wicket') and bowler:
+        return f"{wicket_type} b {bowler.name}"
+    else:
+        return wicket_type
 
 @app.route('/api/innings/<int:innings_id>/ball', methods=['POST'])
+
 def record_ball(innings_id):
     innings = Innings.query.get_or_404(innings_id)
     match = Match.query.get(innings.match_id)
@@ -465,7 +483,7 @@ def record_ball(innings_id):
                     bp.sixes += 1
             if wicket and wicket_type != 'run_out':
                 bp.dismissed = True
-                bp.dismissal_type = wicket_type
+                bp.dismissal_type = build_dismissal_text(wicket_type, bowler_id, fielder_id)
                 bp.is_active = False
 
     elif batsman_id and is_legal:
@@ -474,7 +492,7 @@ def record_ball(innings_id):
             bp.balls_faced += 1
             if wicket and wicket_type != 'run_out':
                 bp.dismissed = True
-                bp.dismissal_type = wicket_type
+                bp.dismissal_type = build_dismissal_text(wicket_type, bowler_id, fielder_id)
                 bp.is_active = False
 
     # Handle run outs separately
@@ -483,8 +501,10 @@ def record_ball(innings_id):
         bp = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=out_batsman_id).first()
         if bp:
             bp.dismissed = True
-            bp.dismissal_type = 'run_out'
+            fielder = Player.query.get(fielder_id) if fielder_id else None
+            bp.dismissal_type = f"run out ({fielder.name})" if fielder else "run out"
             bp.is_active = False
+            
 
     # Update bowler performance
     if bowler_id:
@@ -574,8 +594,9 @@ def innings_state(innings_id):
     active_bowling = BowlingPerformance.query.filter_by(innings_id=innings_id, is_active=True).first()
 
     recent_balls = Ball.query.filter_by(innings_id=innings_id).order_by(Ball.id.desc()).limit(12).all()
-
-    batting_scorecard = BattingPerformance.query.filter_by(innings_id=innings_id).all()
+    
+    batting_scorecard = BattingPerformance.query.filter_by(innings_id=innings_id)\
+        .order_by(BattingPerformance.batting_position).all()
     bowling_scorecard = BowlingPerformance.query.filter_by(innings_id=innings_id).all()
 
     def ball_icon(b):
