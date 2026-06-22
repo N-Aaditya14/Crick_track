@@ -462,7 +462,12 @@ def record_ball(innings_id):
     db.session.add(ball)
 
     # Update innings totals
-    total_added = runs + extra_runs
+    if extra_type == 'wide':
+        total_added = extra_runs + 1
+    elif extra_type == 'no_ball':
+        total_added = runs + extra_runs + 1
+    else:
+        total_added = runs + extra_runs
     innings.total_runs += total_added
     innings.extras += extra_runs
     if wicket:
