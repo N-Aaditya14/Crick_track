@@ -58,7 +58,7 @@
 
     <!-- Batting scorecard -->
     <h3>Batting</h3>
-    {% set bat_perfs = innings.batting_performances | selectattr('balls_faced', '>', 0) | list %}
+    {% set bat_perfs = innings.batting_performances | selectattr('balls_faced', '>', 0) | sort(attribute='batting_position') | list %}
     {% if bat_perfs %}
     <table style="margin-bottom:1.5rem;">
         <thead><tr><th>Batsman</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th><th>Dismissal</th></tr></thead>
