@@ -337,7 +337,6 @@ let batsmen = [
 let batsmenCheckOrder = [];
 
 let activeBowlerId = {% if active_bowling %}{{ active_bowling.player_id }}{% else %}null{% endif %};
-
 // ── Checkbox style helpers ──
 function styleCheckLabel(lbl, checked) {
     lbl.style.background = checked ? 'rgba(0,230,118,0.07)' : '';
@@ -346,21 +345,18 @@ function styleCheckLabel(lbl, checked) {
 
 document.querySelectorAll('#batsmen-list label').forEach(lbl => {
     lbl.querySelector('input').addEventListener('change', () => {
-        styleCheckLabel(lbl, lbl.querySelector('input').checked);
-    });
-});
-
-// Track the order in which checkboxes are checked so the "first checked" rule is preserved
-document.querySelectorAll('#batsmen-list input').forEach(cb => {
-    cb.addEventListener('change', () => {
-        const id = parseInt(cb.value);
-        if (cb.checked) {
-            if (!batsmenCheckOrder.includes(id)) batsmenCheckOrder.push(id);
+        const id = parseInt(lbl.querySelector('input').value);
+        const checked = lbl.querySelector('input').checked;
+        styleCheckLabel(lbl, checked);
+        if (checked) {
+            batsmenCheckOrder.push(id);
         } else {
             batsmenCheckOrder = batsmenCheckOrder.filter(x => x !== id);
         }
     });
 });
+
+
 
 document.querySelectorAll('#bowler-list label, #new-batsman-list label').forEach(lbl => {
     const inp = lbl.querySelector('input');
