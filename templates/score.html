@@ -333,6 +333,9 @@ let batsmen = [
     {% endfor %}
 ];
 
+// Order in which batsmen were checked in the Select Batsmen modal.
+let batsmenCheckOrder = [];
+
 let activeBowlerId = {% if active_bowling %}{{ active_bowling.player_id }}{% else %}null{% endif %};
 
 // ── Checkbox style helpers ──
@@ -344,6 +347,18 @@ function styleCheckLabel(lbl, checked) {
 document.querySelectorAll('#batsmen-list label').forEach(lbl => {
     lbl.querySelector('input').addEventListener('change', () => {
         styleCheckLabel(lbl, lbl.querySelector('input').checked);
+    });
+});
+
+// Track the order in which checkboxes are checked so the "first checked" rule is preserved
+document.querySelectorAll('#batsmen-list input').forEach(cb => {
+    cb.addEventListener('change', () => {
+        const id = parseInt(cb.value);
+        if (cb.checked) {
+            if (!batsmenCheckOrder.includes(id)) batsmenCheckOrder.push(id);
+        } else {
+            batsmenCheckOrder = batsmenCheckOrder.filter(x => x !== id);
+        }
     });
 });
 
@@ -628,21 +643,25 @@ async function saveNewBatsman() {
 
 // ── Select batsmen modal ──
 function openSelectBatsmen() {
-    // Pre-tick current batsmen
+    // initialize selection order from current batsmen list (preserve strike order)
+    batsmenCheckOrder = batsmen.map(b => b.id);
     document.querySelectorAll('#batsmen-list input').forEach(cb => {
-        cb.checked = batsmen.some(b => b.id === parseInt(cb.value));
+        const id = parseInt(cb.value);
+        cb.checked = batsmenCheckOrder.includes(id);
         styleCheckLabel(cb.closest('label'), cb.checked);
     });
     openModal('select-batsmen-modal');
 }
 
 async function saveBatsmen() {
-    const checked = [...document.querySelectorAll('#batsmen-list input:checked')];
-    if (checked.length === 0) { alert('Select at least 1 batsman.'); return; }
-    batsmen = checked.map(cb => ({
-        id: parseInt(cb.value),
-        name: cb.closest('label').querySelector('span').textContent.trim()
-    }));
+    if (batsmenCheckOrder.length === 0) { alert('Select at least 1 batsman.'); return; }
+    batsmen = batsmenCheckOrder.map(id => {
+        const cb = document.querySelector(`#batsmen-list input[value="${id}"]`);
+        return {
+            id,
+            name: cb.closest('label').querySelector('span').textContent.trim()
+        };
+    });
     await fetch(`/api/innings/${INNINGS_ID}/set_batsmen`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ player_ids: batsmen.map(b => b.id) })
