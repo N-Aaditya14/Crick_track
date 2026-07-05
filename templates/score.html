@@ -313,6 +313,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 const INNINGS_ID = {{ innings.id if innings else 'null' }};
 const MATCH_ID   = {{ match.id }};
@@ -325,18 +326,15 @@ let selectedExtraRuns = 0;
 let wicketActive     = false;
 let selectedWicketType = null;
 
-// Strike: index 0 = on strike, index 1 = non-striker
-// Each entry: { id, name }
 let batsmen = [
     {% for b in active_batting %}
     { id: {{ b.player_id }}, name: "{{ b.player.name }}" },
     {% endfor %}
 ];
 
-// Order in which batsmen were checked in the Select Batsmen modal.
 let batsmenCheckOrder = [];
-
 let activeBowlerId = {% if active_bowling %}{{ active_bowling.player_id }}{% else %}null{% endif %};
+
 // ── Checkbox style helpers ──
 function styleCheckLabel(lbl, checked) {
     lbl.style.background = checked ? 'rgba(0,230,118,0.07)' : '';
@@ -356,12 +354,9 @@ document.querySelectorAll('#batsmen-list label').forEach(lbl => {
     });
 });
 
-
-
 document.querySelectorAll('#bowler-list label, #new-batsman-list label').forEach(lbl => {
     const inp = lbl.querySelector('input');
     inp.addEventListener('change', () => {
-        // deselect siblings
         const name = inp.name;
         document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
             styleCheckLabel(r.closest('label'), r.checked);
@@ -488,7 +483,7 @@ function renderBatsmenUI() {
 
 function setStrike(playerId) {
     if (batsmen.length < 2) return;
-    if (batsmen[0].id === playerId) return; // already on strike
+    if (batsmen[0].id === playerId) return;
     batsmen = [batsmen[1], batsmen[0]];
     renderBatsmenUI();
 }
@@ -500,12 +495,10 @@ function swapStrike() {
     refreshBatsmanStats();
 }
 
-// After odd runs, swap strike automatically
 function handleStrikeAfterBall(runs, extraType, wicket) {
-    if (wicket) return; // handled separately after new batsman selected
+    if (wicket) return;
     const isLegal = extraType !== 'wide' && extraType !== 'no_ball';
-    if (!isLegal) return; // no-balls and wides don't change strike
-    // odd runs = swap; even = no swap; end of over = swap (handled separately)
+    if (!isLegal) return;
     const totalBatRuns = (extraType === null || extraType === undefined) ? runs : 0;
     if (totalBatRuns % 2 === 1) swapStrike();
 }
@@ -537,7 +530,6 @@ async function submitBall() {
     const dismissedId = strikerId;
     const extraType = selectedExtra;
 
-    // Reset controls
     resetControls();
 
     const res = await fetch(`/api/innings/${INNINGS_ID}/ball`, {
@@ -545,33 +537,30 @@ async function submitBall() {
     });
     const data = await res.json();
 
-    // Handle strike rotation for non-wicket balls
-        if (!wasWicket) {
-            handleStrikeAfterBall(runsScored, extraType, false);
-        }
-
-        if (data.innings_over) {
-            handleInningsEnd(data);
-            return;
-        }
-
-        // Wicket — show new batsman popup first, before over-end check
-        if (wasWicket) {
-            batsmen = batsmen.filter(b => b.id !== dismissedId);
-            await showNewBatsmanModal(dismissedId);
-        }
-
-        // Check if over just ended
-        const ballsNow = data.total_balls;
-        if (isLegal && ballsNow > 0 && ballsNow % 6 === 0) {
-            swapStrike();
-            showOverEndModal(data);
-            await refreshState();
-            return;
-        }
-
-        await refreshState();
+    if (!wasWicket) {
+        handleStrikeAfterBall(runsScored, extraType, false);
     }
+
+    if (data.innings_over) {
+        handleInningsEnd(data);
+        return;
+    }
+
+    if (wasWicket) {
+        batsmen = batsmen.filter(b => b.id !== dismissedId);
+        await showNewBatsmanModal(dismissedId);
+    }
+
+    const ballsNow = data.total_balls;
+    if (isLegal && ballsNow > 0 && ballsNow % 6 === 0) {
+        swapStrike();
+        showOverEndModal(data);
+        await refreshState();
+        return;
+    }
+
+    await refreshState();
+}
 
 function resetControls() {
     selectedRuns = null; selectedExtra = null; selectedExtraRuns = 0;
@@ -596,7 +585,6 @@ function showOverEndModal(data) {
     openModal('over-end-modal');
 }
 
-// ── New batsman modal ──
 // ── New batsman modal ──
 let newBatsmanResolve = null;
 
@@ -639,7 +627,6 @@ async function saveNewBatsman() {
 
 // ── Select batsmen modal ──
 function openSelectBatsmen() {
-    // initialize selection order from current batsmen list (preserve strike order)
     batsmenCheckOrder = batsmen.map(b => b.id);
     document.querySelectorAll('#batsmen-list input').forEach(cb => {
         const id = parseInt(cb.value);
@@ -699,7 +686,6 @@ async function saveBowler() {
 function openModal(id)  { document.getElementById(id).style.display = 'flex'; }
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// Close modals on backdrop click (except required bowler)
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
         if (e.target === overlay && overlay.id !== 'over-end-modal' && overlay.id !== 'innings-end-modal') {
@@ -724,9 +710,6 @@ async function refreshState() {
             `Need ${d.required} off ${ballsLeft} balls`;
     }
 
-    // Ball dots (current over only)
-    const currentOverStart = Math.floor(d.total_balls / 6) * 6;
-    // We show last 6 legal balls as the "this over" indicator
     const overBalls = d.recent_balls.slice(-6);
     document.getElementById('ball-dots').innerHTML = overBalls.map(b => {
         let bg = 'var(--surface2)', fg = 'var(--text-mid)', bord = 'var(--border2)';
@@ -738,7 +721,6 @@ async function refreshState() {
             font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:600;color:${fg};">${b}</div>`;
     }).join('');
 
-    // Update batsman stats
     d.active_batsmen.forEach(b => {
         const el = document.getElementById(`bat-stats-${b.id}`);
         if (el) {
@@ -747,13 +729,11 @@ async function refreshState() {
         }
     });
 
-    // Sync local batsmen list names/ids from server if needed
     if (d.active_batsmen.length > 0 && batsmen.length === 0) {
         batsmen = d.active_batsmen.map(b => ({ id: b.id, name: b.name }));
         renderBatsmenUI();
     }
 
-    // Update bowler display
     if (d.active_bowler) {
         activeBowlerId = d.active_bowler.id;
         document.getElementById('active-bowler').innerHTML = `
@@ -765,7 +745,6 @@ async function refreshState() {
             </div>`;
     }
 
-    // Batting scorecard
     document.getElementById('batting-tbody').innerHTML = d.batting_scorecard.map(b => `
         <tr>
             <td>${b.name}${b.is_active ? ' <span class="badge badge-green">●</span>' : ''}</td>
@@ -787,7 +766,6 @@ async function refreshState() {
         </tr>`).join('');
 
     renderBatsmenUI();
-    // Re-attach stats after re-render
     d.active_batsmen.forEach(b => {
         const el = document.getElementById(`bat-stats-${b.id}`);
         if (el) {
@@ -798,12 +776,10 @@ async function refreshState() {
 }
 
 function refreshBatsmanStats() {
-    // lightweight — just re-renders the UI without a server call
     renderBatsmenUI();
 }
 
 function handleInningsEnd(data) {
-    const modal = document.getElementById('innings-end-modal');
     if (data.match_status === 'complete') {
         document.getElementById('innings-end-icon').textContent = '🏆';
         document.getElementById('innings-end-title').textContent = 'Match Complete!';
@@ -830,17 +806,89 @@ function showTab(name) {
         btn.style.borderBottom = active ? '2px solid var(--accent)' : '2px solid transparent';
     });
 }
+
 async function undoBall() {
     if (!INNINGS_ID) return;
     if (!confirm('Undo the last ball?')) return;
     await fetch(`/api/innings/${INNINGS_ID}/undo`, { method: 'POST' });
     await refreshState();
 }
+
 async function ensureInnings() {
     const res = await fetch(`/api/match/${MATCH_ID}/start_innings`, {
         method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({})
     });
     location.reload();
+}
+
+// ── Win Probability Chart ──
+let winProbChart = null;
+
+async function refreshWinProbability() {
+    const res = await fetch(`/api/match/${MATCH_ID}/win_probability`);
+    const d = await res.json();
+    if (!d.data_points || d.data_points.length < 2) return;
+
+    const labels = d.data_points.map(p => p.label);
+    const probs  = d.data_points.map(p => p.probability);
+    const anti   = probs.map(p => 100 - p);
+    const inn1Color = 'rgba(0,230,118,0.85)';
+    const inn2Color = 'rgba(68,138,255,0.85)';
+    const pointColors = d.data_points.map(p => p.innings === 1 ? inn1Color : inn2Color);
+
+    if (winProbChart) {
+        winProbChart.data.labels = labels;
+        winProbChart.data.datasets[0].data = probs;
+        winProbChart.data.datasets[0].pointBackgroundColor = pointColors;
+        winProbChart.data.datasets[1].data = anti;
+        winProbChart.update('none');
+        return;
+    }
+
+    const ctx = document.getElementById('win-prob-chart').getContext('2d');
+    winProbChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: d.team_a,
+                    data: probs,
+                    borderColor: inn1Color,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: pointColors,
+                    backgroundColor: 'rgba(0,230,118,0.06)',
+                    fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+                },
+                {
+                    label: d.team_b,
+                    data: anti,
+                    borderColor: inn2Color,
+                    pointBackgroundColor: pointColors.map(() => inn2Color),
+                    pointBorderColor: pointColors.map(() => inn2Color),
+                    backgroundColor: 'rgba(68,138,255,0.06)',
+                    fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            animation: { duration: 400 },
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#555', font: { size: 10 }, maxRotation: 45 } },
+                y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#555', font: { size: 10 }, callback: v => v + '%' } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1f1f1f', borderColor: '#2a2a2a', borderWidth: 1,
+                    titleColor: '#f0f0f0', bodyColor: '#999',
+                    callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` }
+                }
+            }
+        }
+    });
 }
 
 // ── Init ──
@@ -850,7 +898,14 @@ async function ensureInnings() {
     } else {
         renderBatsmenUI();
         await refreshState();
+        await refreshWinProbability();
     }
 })();
+
+const _origShowOverEnd = showOverEndModal;
+showOverEndModal = function(data) {
+    _origShowOverEnd(data);
+    refreshWinProbability();
+};
 </script>
 {% endblock %}
