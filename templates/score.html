@@ -834,12 +834,30 @@ async function refreshWinProbability() {
     const anti   = probs.map(p => 100 - p);
     const inn1Color = 'rgba(0,230,118,0.85)';
     const inn2Color = 'rgba(68,138,255,0.85)';
-    const pointColors = d.data_points.map(p => p.innings === 1 ? inn1Color : inn2Color);
+    datasets: [
+    {
+        label: d.team_a,
+        data: probs,
+        borderColor: inn1Color,
+        pointBackgroundColor: inn1Color,
+        pointBorderColor: inn1Color,
+        backgroundColor: 'rgba(0,230,118,0.06)',
+        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+    },
+    {
+        label: d.team_b,
+        data: anti,
+        borderColor: inn2Color,
+        pointBackgroundColor: inn2Color,
+        pointBorderColor: inn2Color,
+        backgroundColor: 'rgba(68,138,255,0.06)',
+        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+    }
+]
 
     if (winProbChart) {
         winProbChart.data.labels = labels;
         winProbChart.data.datasets[0].data = probs;
-        winProbChart.data.datasets[0].pointBackgroundColor = pointColors;
         winProbChart.data.datasets[1].data = anti;
         winProbChart.update('none');
         return;
