@@ -1,4 +1,5 @@
 import os
+from re import match
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -337,12 +338,18 @@ def start_innings(match_id):
     match = Match.query.get_or_404(match_id)
     data = request.json
 
+    target = data.get('target')
+    if match.current_innings == 2:
+        inn1 = Innings.query.filter_by(match_id=match_id, innings_number=1).first()
+        if inn1:
+            target = inn1.total_runs + 1
+
     innings = Innings(
         match_id=match_id,
         innings_number=match.current_innings,
         batting_team=match.batting_team,
         bowling_team=match.bowling_team,
-        target=data.get('target')
+        target=target
     )
     db.session.add(innings)
     db.session.flush()
@@ -383,6 +390,12 @@ def set_batsmen(innings_id):
         perf = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=int(pid)).first()
         if perf:
             perf.is_active = True
+            if perf.batting_position is None:
+                next_pos = BattingPerformance.query.filter(
+                    BattingPerformance.innings_id == innings_id,
+                    BattingPerformance.batting_position != None
+                ).count()
+                perf.batting_position = next_pos + 1
 
     db.session.commit()
     return jsonify({'ok': True})
@@ -401,8 +414,20 @@ def set_bowler(innings_id):
     db.session.commit()
     return jsonify({'ok': True})
 
+def build_dismissal_text(wicket_type, bowler_id, fielder_id):
+    bowler = Player.query.get(bowler_id) if bowler_id else None
+    fielder = Player.query.get(fielder_id) if fielder_id else None
+    if wicket_type == 'caught' and fielder and bowler:
+        return f"c {fielder.name} b {bowler.name}"
+    elif wicket_type == 'stumped' and fielder and bowler:
+        return f"st {fielder.name} b {bowler.name}"
+    elif wicket_type in ('bowled', 'lbw', 'hit_wicket') and bowler:
+        return f"{wicket_type} b {bowler.name}"
+    else:
+        return wicket_type
 
 @app.route('/api/innings/<int:innings_id>/ball', methods=['POST'])
+
 def record_ball(innings_id):
     innings = Innings.query.get_or_404(innings_id)
     match = Match.query.get(innings.match_id)
@@ -437,7 +462,12 @@ def record_ball(innings_id):
     db.session.add(ball)
 
     # Update innings totals
-    total_added = runs + extra_runs
+    if extra_type == 'wide':
+        total_added = extra_runs + 1
+    elif extra_type == 'no_ball':
+        total_added = runs + extra_runs + 1
+    else:
+        total_added = runs + extra_runs
     innings.total_runs += total_added
     innings.extras += extra_runs
     if wicket:
@@ -458,7 +488,7 @@ def record_ball(innings_id):
                     bp.sixes += 1
             if wicket and wicket_type != 'run_out':
                 bp.dismissed = True
-                bp.dismissal_type = wicket_type
+                bp.dismissal_type = build_dismissal_text(wicket_type, bowler_id, fielder_id)
                 bp.is_active = False
 
     elif batsman_id and is_legal:
@@ -467,7 +497,7 @@ def record_ball(innings_id):
             bp.balls_faced += 1
             if wicket and wicket_type != 'run_out':
                 bp.dismissed = True
-                bp.dismissal_type = wicket_type
+                bp.dismissal_type = build_dismissal_text(wicket_type, bowler_id, fielder_id)
                 bp.is_active = False
 
     # Handle run outs separately
@@ -476,8 +506,10 @@ def record_ball(innings_id):
         bp = BattingPerformance.query.filter_by(innings_id=innings_id, player_id=out_batsman_id).first()
         if bp:
             bp.dismissed = True
-            bp.dismissal_type = 'run_out'
+            fielder = Player.query.get(fielder_id) if fielder_id else None
+            bp.dismissal_type = f"run out ({fielder.name})" if fielder else "run out"
             bp.is_active = False
+            
 
     # Update bowler performance
     if bowler_id:
@@ -510,7 +542,16 @@ def record_ball(innings_id):
     # Check innings end
     innings_over = False
     legal_overs = innings.total_balls // 6
-    if legal_overs >= match.overs or innings.total_wickets >= 10:
+
+    batting_team_size = MatchPlayer.query.filter_by(
+        match_id=match.id,
+        team='A' if innings.batting_team == match.team_a_name else 'B'
+    ).count()
+    max_wickets = max(batting_team_size - 1, 0)
+
+    target_reached = innings.target is not None and innings.total_runs >= innings.target
+
+    if legal_overs >= match.overs or innings.total_wickets >= max_wickets or target_reached:
         innings_over = True
         innings.is_complete = True
 
@@ -525,7 +566,7 @@ def record_ball(innings_id):
             inn2 = innings
             if inn2.total_runs > inn1.total_runs:
                 match.winner = inn2.batting_team
-                wickets_left = 10 - inn2.total_wickets
+                wickets_left = max_wickets - inn2.total_wickets
                 match.result_text = f"{inn2.batting_team} won by {wickets_left} wicket{'s' if wickets_left != 1 else ''}"
             elif inn1.total_runs > inn2.total_runs:
                 match.winner = inn1.batting_team
@@ -558,8 +599,9 @@ def innings_state(innings_id):
     active_bowling = BowlingPerformance.query.filter_by(innings_id=innings_id, is_active=True).first()
 
     recent_balls = Ball.query.filter_by(innings_id=innings_id).order_by(Ball.id.desc()).limit(12).all()
-
-    batting_scorecard = BattingPerformance.query.filter_by(innings_id=innings_id).all()
+    
+    batting_scorecard = BattingPerformance.query.filter_by(innings_id=innings_id)\
+        .order_by(BattingPerformance.batting_position).all()
     bowling_scorecard = BowlingPerformance.query.filter_by(innings_id=innings_id).all()
 
     def ball_icon(b):
@@ -697,12 +739,12 @@ def undo_ball(innings_id):
         'total_balls': innings.total_balls,
         'over_display': innings.over_display()
     })
+
 @app.route('/api/match/<int:match_id>/win_probability')
 def win_probability(match_id):
     match = Match.query.get_or_404(match_id)
     innings_list = Innings.query.filter_by(match_id=match_id).order_by(Innings.innings_number).all()
 
-    # Expected run rate formula: 14 / (total_overs ^ 0.2)
     total_overs = match.overs
     expected_rr = 14 / (total_overs ** 0.2)
 
@@ -745,31 +787,19 @@ def win_probability(match_id):
 
     for innings in innings_list:
         players = get_batting_team_size(innings)
-        # Get ball-by-ball data grouped by over
         balls = Ball.query.filter_by(innings_id=innings.id).order_by(Ball.id).all()
 
-        # Build over-by-over snapshot
         runs = 0
         wickets = 0
         legal_balls = 0
 
-        # Over 0 start point
-        if innings.innings_number == 1:
-            data_points.append({
-                'label': f'Inn1 Over 0',
-                'innings': 1,
-                'over': 0,
-                'batting_team': innings.batting_team,
-                'probability': 50.0
-            })
-        else:
-            data_points.append({
-                'label': f'Inn2 Over 0',
-                'innings': 2,
-                'over': 0,
-                'batting_team': innings.batting_team,
-                'probability': 50.0
-            })
+        data_points.append({
+            'label': f'Inn{innings.innings_number} Over 0',
+            'innings': innings.innings_number,
+            'over': 0,
+            'batting_team': innings.batting_team,
+            'probability': 50.0
+        })
 
         current_over = 0
         for ball in balls:
@@ -807,6 +837,8 @@ def win_probability(match_id):
         'total_overs': total_overs
     })
 
+
+@app.route('/api/match/<int:match_id>/delete', methods=['POST'])
 
 @app.route('/api/match/<int:match_id>/delete', methods=['POST'])
 def delete_match(match_id):
