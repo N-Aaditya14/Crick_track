@@ -834,26 +834,6 @@ async function refreshWinProbability() {
     const anti   = probs.map(p => 100 - p);
     const inn1Color = 'rgba(0,230,118,0.85)';
     const inn2Color = 'rgba(68,138,255,0.85)';
-    datasets: [
-    {
-        label: d.team_a,
-        data: probs,
-        borderColor: inn1Color,
-        pointBackgroundColor: inn1Color,
-        pointBorderColor: inn1Color,
-        backgroundColor: 'rgba(0,230,118,0.06)',
-        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
-    },
-    {
-        label: d.team_b,
-        data: anti,
-        borderColor: inn2Color,
-        pointBackgroundColor: inn2Color,
-        pointBorderColor: inn2Color,
-        backgroundColor: 'rgba(68,138,255,0.06)',
-        fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
-    }
-]
 
     if (winProbChart) {
         winProbChart.data.labels = labels;
@@ -873,8 +853,8 @@ async function refreshWinProbability() {
                     label: d.team_a,
                     data: probs,
                     borderColor: inn1Color,
-                    pointBackgroundColor: pointColors,
-                    pointBorderColor: pointColors,
+                    pointBackgroundColor: inn1Color,
+                    pointBorderColor: inn1Color,
                     backgroundColor: 'rgba(0,230,118,0.06)',
                     fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
                 },
@@ -882,8 +862,8 @@ async function refreshWinProbability() {
                     label: d.team_b,
                     data: anti,
                     borderColor: inn2Color,
-                    pointBackgroundColor: pointColors.map(() => inn2Color),
-                    pointBorderColor: pointColors.map(() => inn2Color),
+                    pointBackgroundColor: inn2Color,
+                    pointBorderColor: inn2Color,
                     backgroundColor: 'rgba(68,138,255,0.06)',
                     fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
                 }
