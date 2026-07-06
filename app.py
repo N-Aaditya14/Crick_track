@@ -759,7 +759,7 @@ def win_probability(match_id):
         run_performance = min(runs / par, 2.0) if par > 0 else 1.0
         wicket_pressure = wickets / (players - 1) if players > 1 else 1.0
         wicket_factor = 1 - wicket_pressure
-        performance = run_performance * wicket_factor
+        performance = (run_performance ** 0.6) * (wicket_factor ** 1.8)
         prob = 50 + (performance - 1) * 40
         return round(max(5.0, min(95.0, prob)), 1)
 
@@ -778,7 +778,7 @@ def win_probability(match_id):
         rr_ratio = current_rr / required_rr if required_rr > 0 else 2.0
         wicket_pressure = wickets / (players - 1) if players > 1 else 1.0
         wicket_factor = 1 - wicket_pressure
-        performance = rr_ratio * wicket_factor
+        performance = (rr_ratio ** 0.6) * (wicket_factor ** 1.8)
         prob = 50 + (performance - 1) * 40
         return round(max(5.0, min(95.0, prob)), 1)
 
