@@ -829,6 +829,11 @@ def win_probability(match_id):
                     'probability': prob
                 })
 
+    # Normalize: probability always represents team_a's win chance
+    for dp in data_points:
+        if dp['batting_team'] == match.team_b_name:
+            dp['probability'] = round(100 - dp['probability'], 1)
+
     return jsonify({
         'data_points': data_points,
         'team_a': match.team_a_name,
