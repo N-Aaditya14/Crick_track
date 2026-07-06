@@ -223,5 +223,9 @@ async function refreshWinProbability() {
         }
     });
 }
+refreshWinProbability();
+if (IS_LIVE) {
+    setInterval(() => { location.reload(); }, 30000);
+}
 </script>
 {% endblock %}

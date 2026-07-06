@@ -836,9 +836,6 @@ def win_probability(match_id):
         'total_overs': total_overs
     })
 
-
-@app.route('/api/match/<int:match_id>/delete', methods=['POST'])
-
 @app.route('/api/match/<int:match_id>/delete', methods=['POST'])
 def delete_match(match_id):
     match = Match.query.get_or_404(match_id)
