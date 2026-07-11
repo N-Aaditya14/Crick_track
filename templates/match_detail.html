@@ -29,6 +29,31 @@
 </div>
 {% endif %}
 
+{% if match.status == 'complete' and match.man_of_the_match_id %}
+<div class="card" style="margin-bottom:1.5rem; background:var(--surface2);">
+    <div class="section-label" style="margin-bottom:0.5rem;">Man of the Match</div>
+    <div style="display:flex; align-items:center; gap:1rem;">
+        <div style="font-size:2rem;">🏅</div>
+        <div>
+            <div style="font-size:1.1rem; font-weight:700;">
+                <a href="/player/{{ match.man_of_the_match_id }}" style="color:var(--accent);">
+                    {% for innings in innings_list %}
+                        {% for b in innings.batting_performances %}
+                            {% if b.player_id == match.man_of_the_match_id %}{{ b.player.name }}{% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                </a>
+            </div>
+            <div style="font-size:0.8rem; color:var(--text-dim);" id="motm-breakdown">Loading...</div>
+        </div>
+    </div>
+    <div style="margin-top:1rem;">
+        <div class="section-label" style="margin-bottom:0.5rem;">Top Performers</div>
+        <div id="motm-top3" style="display:flex; flex-direction:column; gap:0.35rem;"></div>
+    </div>
+</div>
+{% endif %}
+
 {% if match.status != 'complete' %}
 <div style="margin-bottom:1rem;">
     <a href="/score/{{ match.id }}" class="btn btn-primary">Continue Scoring →</a>
@@ -223,6 +248,39 @@ async function refreshWinProbability() {
         }
     });
 }
+
+async function loadMotm() {
+    const res = await fetch(`/api/match/${MATCH_ID}/motm`);
+    const d = await res.json();
+    if (!d.top3 || d.top3.length === 0) return;
+
+    const breakdown = document.getElementById('motm-breakdown');
+    if (breakdown && d.top3[0]) {
+        breakdown.textContent = d.top3[0].breakdown + ` · ${d.top3[0].points} pts`;
+    }
+
+    const top3el = document.getElementById('motm-top3');
+    if (top3el) {
+        top3el.innerHTML = d.top3.map((p, i) => `
+            <div style="display:flex; justify-content:space-between; align-items:center;
+                padding:0.4rem 0.6rem; border-radius:var(--radius);
+                background:${i === 0 ? 'rgba(0,230,118,0.07)' : 'var(--surface3)'};
+                border:1px solid ${i === 0 ? 'rgba(0,230,118,0.2)' : 'var(--border)'};">
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span style="font-size:0.75rem; color:var(--text-dim);">#${i+1}</span>
+                    <a href="/player/${p.player_id}" style="font-weight:600; color:${i === 0 ? 'var(--accent)' : 'var(--text)'}; font-size:0.88rem;">${p.name}</a>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.88rem; font-weight:600; color:var(--text);">${p.points} pts</div>
+                    <div style="font-size:0.7rem; color:var(--text-dim);">${p.breakdown}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+loadMotm();
+
 refreshWinProbability();
 if (IS_LIVE) {
     setInterval(() => { location.reload(); }, 30000);

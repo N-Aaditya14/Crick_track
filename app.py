@@ -68,6 +68,9 @@ class Player(db.Model):
             match_ids.add(b.match_id)
         return len(match_ids)
 
+    def career_motm(self):
+        return Match.query.filter_by(man_of_the_match_id=self.id).count()
+
 
 class Match(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,7 +86,7 @@ class Match(db.Model):
     result_text = db.Column(db.String(200))
     toss_winner = db.Column(db.String(100))
     toss_choice = db.Column(db.String(10))
-
+    man_of_the_match_id = db.Column(db.Integer, db.ForeignKey('player.id'), nullable=True)
     innings = db.relationship('Innings', backref='match', lazy=True, order_by='Innings.innings_number')
     team_a_players = db.relationship('MatchPlayer', foreign_keys='MatchPlayer.match_id',
                                       primaryjoin="and_(MatchPlayer.match_id==Match.id, MatchPlayer.team=='A')",
@@ -575,6 +578,12 @@ def record_ball(innings_id):
                 match.winner = 'Tie'
                 match.result_text = "Match tied!"
 
+    # Auto-set MOTM when match completes
+    if innings_over and match.status == 'complete':
+        scores = calculate_motm(match.id)
+        if scores:
+            match.man_of_the_match_id = scores[0]['player_id']
+
     db.session.commit()
 
     return jsonify({
@@ -738,6 +747,111 @@ def undo_ball(innings_id):
         'total_balls': innings.total_balls,
         'over_display': innings.over_display()
     })
+
+def calculate_motm(match_id):
+    import math
+    match = Match.query.get(match_id)
+    if not match or not match.winner:
+        return []
+
+    total_overs = match.overs
+    sr_threshold = 371.7 * (total_overs ** -0.3)
+    eco_threshold = 15.47826 - 3.08742 * math.log(total_overs)
+    min_balls_batting = total_overs / 2
+    all_players = MatchPlayer.query.filter_by(match_id=match_id).all()
+    scores = []
+
+    for mp in all_players:
+        player = mp.player
+        points = 0.0
+        breakdown = []
+
+        # Batting points across all innings
+        bat_perfs = BattingPerformance.query.filter_by(
+            match_id=match_id, player_id=player.id
+        ).all()
+        total_runs = sum(b.runs for b in bat_perfs)
+        total_balls = sum(b.balls_faced for b in bat_perfs)
+        points += total_runs
+        if total_runs > 0:
+            breakdown.append(f'{total_runs} runs')
+
+        # SR bonus
+        if total_balls >= min_balls_batting and total_balls > 0:
+            sr = (total_runs / total_balls) * 100
+            if sr >= sr_threshold:
+                points += 30
+                breakdown.append(f'SR bonus ({sr:.0f})')
+
+        # Bowling points across all innings
+        bowl_perfs = BowlingPerformance.query.filter_by(
+            match_id=match_id, player_id=player.id
+        ).all()
+        total_wickets = sum(b.wickets for b in bowl_perfs)
+        total_balls_bowled = sum(b.balls_bowled for b in bowl_perfs)
+        total_runs_conceded = sum(b.runs_conceded for b in bowl_perfs)
+        points += total_wickets * 20
+        if total_wickets > 0:
+            breakdown.append(f'{total_wickets} wickets')
+
+        # Economy bonus
+        if total_balls_bowled >= 6:
+            economy = total_runs_conceded / (total_balls_bowled / 6)
+            if economy <= eco_threshold:
+                points += 20
+                breakdown.append(f'Economy bonus ({economy:.2f})')
+
+        # Fielding points
+        field_perfs = FieldingPerformance.query.filter_by(
+            match_id=match_id, player_id=player.id
+        ).all()
+        total_catches = sum(f.catches for f in field_perfs)
+        total_runouts = sum(f.run_outs for f in field_perfs)
+        points += total_catches * 8
+        points += total_runouts * 12
+        if total_catches > 0:
+            breakdown.append(f'{total_catches} catches')
+        if total_runouts > 0:
+            breakdown.append(f'{total_runouts} run outs')
+
+        # Win bonus
+        on_winning_team = False
+        if match.winner and match.winner != 'Tie':
+            winning_team = 'A' if match.winner == match.team_a_name else 'B'
+            if mp.team == winning_team:
+                on_winning_team = True
+                points += 20
+                breakdown.append('Win bonus')
+
+        scores.append({
+            'player_id': player.id,
+            'name': player.name,
+            'points': round(points, 1),
+            'breakdown': ', '.join(breakdown) if breakdown else 'No contributions'
+        })
+
+    scores.sort(key=lambda x: x['points'], reverse=True)
+    return scores
+
+
+@app.route('/api/match/<int:match_id>/motm')
+def get_motm(match_id):
+    scores = calculate_motm(match_id)
+    match = Match.query.get_or_404(match_id)
+    return jsonify({
+        'top3': scores[:3],
+        'motm_id': match.man_of_the_match_id
+    })
+
+
+@app.route('/api/match/<int:match_id>/set_motm', methods=['POST'])
+def set_motm(match_id):
+    match = Match.query.get_or_404(match_id)
+    data = request.json
+    match.man_of_the_match_id = data.get('player_id')
+    db.session.commit()
+    return jsonify({'ok': True})
+
 
 @app.route('/api/match/<int:match_id>/win_probability')
 def win_probability(match_id):
