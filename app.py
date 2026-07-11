@@ -1,4 +1,5 @@
 import os
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -6,10 +7,29 @@ import json
 
 app = Flask(__name__)
 
-# Uses Render's Postgres database when deployed, or local SQLite for testing
-# Check if Render's Postgres database is available, otherwise fall back to temporary in-memory database
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///:memory:')
+
+def build_database_uri():
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///:memory:')
+    if not database_url:
+        return 'sqlite:///:memory:'
+
+    if database_url.startswith(('postgres://', 'postgresql://')):
+        parsed = urlparse(database_url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.setdefault('sslmode', 'require')
+        return urlunparse(parsed._replace(query=urlencode(query)))
+
+    return database_url
+
+
+# Uses Render's Postgres database when deployed, or local SQLite for testing.
+# Render requires SSL for Postgres connections, so we enforce sslmode=require.
+app.config['SQLALCHEMY_DATABASE_URI'] = build_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
+if app.config['SQLALCHEMY_DATABASE_URI'].startswith(('postgres://', 'postgresql://')):
+    app.config['SQLALCHEMY_ENGINE_OPTIONS']['connect_args'] = {'sslmode': 'require'}
+
 db = SQLAlchemy(app)
 
 # ─────────────────────────────────────────────
@@ -971,7 +991,10 @@ def delete_match(match_id):
     return jsonify({'ok': True})
 
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as exc:
+        print(f"Database init warning: {exc}")
 
 if __name__ == '__main__':
     import os
